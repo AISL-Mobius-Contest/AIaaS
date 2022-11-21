@@ -50,10 +50,11 @@ import numpy as np
 import faiss
 from tqdm.auto import tqdm
 
-from patchnetvlad.tools.datasets import PlaceDataset
-from patchnetvlad.models.local_matcher import local_matcher
-from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
+from AIHub.Patch_NetVLAD.patchnetvlad.tools.datasets import PlaceDataset
+from AIHub.Patch_NetVLAD.patchnetvlad.models.local_matcher import local_matcher
+from AIHub.Patch_NetVLAD.patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
 
+import AIHub.Patch_NetVLAD.kafka_module as kafka_module
 
 def compute_recall(gt, predictions, numQ, n_values, recall_str=''):
     # global_recalls = compute_recall(gt, predictions, eval_set.numQ, n_values, 'NetVLAD')
@@ -73,30 +74,8 @@ def compute_recall(gt, predictions, numQ, n_values, recall_str=''):
     return all_recalls
 
 
-# def write_kapture_output(opt, eval_set, predictions, outfile_name):
-#     if not exists(opt.result_save_folder):
-#         os.mkdir(opt.result_save_folder)
-#     outfile = join(opt.result_save_folder, outfile_name)
-#     print('Writing results to', outfile)
-#     with open(outfile, 'w') as kap_out:
-#         # kap_out.write('# kapture format: 1.0\n')
-#         # kap_out.write('# query_image, map_image\n')       ##이 부분 수정하여 바로 파싱할 수 있도록
-#         image_list_array = np.array(eval_set.images) #여기다!!!!!!!!
-#         print(len(predictions))
-#         for q_idx in range(len(predictions)):
-#             full_paths = image_list_array[predictions[q_idx]]
-#             # query_full_path = image_list_array[eval_set.numDb + q_idx]
-#             for ref_image_name in full_paths:
-#                 # kap_out.write(ref_image_name)
-#                 # kap_out.write(query_full_path + ', ' + ref_image_name + '\n')
-#                 path = ref_image_name
-#                 path_parsing = path.split("test_image")
-#                 a = path_parsing[1].split("_")
-#                 b = a[1].split(("."))
-#                 gogo = a[0]+","+b[0]
-#                 kap_out.write(gogo)
 
-def write_kapture_output(opt, eval_set, predictions, outfile_name):
+def write_kapture_output(opt, eval_set, predictions, outfile_name, cf):
     if not exists(opt.result_save_folder):
         os.mkdir(opt.result_save_folder)
     outfile = join(opt.result_save_folder, outfile_name)
@@ -111,6 +90,15 @@ def write_kapture_output(opt, eval_set, predictions, outfile_name):
             query_full_path = image_list_array[eval_set.numDb + q_idx]
             for ref_image_name in full_paths:
                 kap_out.write(query_full_path.split('/')[-1] + ', ' + ref_image_name.split('/')[-1] + '\n')
+                print(query_full_path.split('/')[-1])
+                print(ref_image_name.split('/')[-1])
+                
+                location = ref_image_name.split('/')[-1].split('.')[0]
+                
+                report_data = [{"location":location, "cf":cf}]
+                print(report_data)
+                kafka_module.Producer("4WDcam_report", str(report_data))
+                print("kafka produce success")
 
 
 def write_recalls_output(opt, recalls_netvlad, recalls_patchnetvlad, n_values):
@@ -125,10 +113,10 @@ def write_recalls_output(opt, recalls_netvlad, recalls_patchnetvlad, n_values):
             rec_out.write("Recall {}@{}: {:.4f}\n".format('PatchNetVLAD', n, recalls_patchnetvlad[n]))
 
 
-def feature_match(eval_set, device, opt, config):
-    #input_query_local_features_prefix = join(opt.query_input_features_dir, 'patchfeats')
+def feature_match(eval_set, device, opt, config, cf):
+
     input_query_global_features_prefix = join(opt.query_input_features_dir, 'globalfeats.npy')
-    #input_index_local_features_prefix = join(opt.index_input_features_dir, 'patchfeats')
+
     input_index_global_features_prefix = join(opt.index_input_features_dir, 'globalfeats.npy')
 
     qFeat = np.load(input_query_global_features_prefix)
@@ -164,150 +152,49 @@ def feature_match(eval_set, device, opt, config):
                 predictions_new.append(pred)
             predictions = np.array(predictions_new)
             print("here?")
-            #여긴 안옴
+
         else:
-            # noinspection PyArgumentList
-            #print("qFeat : " ,qFeat)
-            #qFeat_shape : (1, 4096)            len(qFeat) : 1              #4096의 의미는 num_pcs(한 이미지당 벡터의 개수)
-            #print("dbFeat : ", dbFeat)                                      #mapillary_WPCA4096을 썼으니 4096개와 비교
-           #dbFeat_shape : (7158, 4096)         len(dbFeat) : 7158          #4096의 의미는 num_pcs(한 이미지당 벡터의 개수)
+
             start = time.time()
-            #_, predictions = faiss_index.search(qFeat, min(len(qFeat), max(n_values)))      #유사도를 n_values에 있는 최대값 만큼 띄울순 있으나 쿼리 이미지가 1개니까 1개만 띄움
+
             _, predictions = faiss_index.search(qFeat, 1)
             end = time.time()
             print(" Extracting time interval is")
             print(f"{end - start:.10f} sec")
-            #_, predictions = faiss_index.search(qFeat, 50)
-            # print("distance : ", _)
-            # print("index_num : ", predictions)
-            # _는 distance이고 prediction은 예측값
 
-    # reranked_predictions = local_matcher(predictions, eval_set, input_query_local_features_prefix,
-    #                                      input_index_local_features_prefix, config, device)
 
     # save predictions to files - Kapture Output
-    write_kapture_output(opt, eval_set, predictions, 'NetVLAD_predictions.txt')
-    #write_kapture_output(opt, eval_set, reranked_predictions, 'PatchNetVLAD_predictions.txt')
+    write_kapture_output(opt, eval_set, predictions, 'NetVLAD_predictions.txt', cf)
 
     print('Finished matching features.')
 
     # for each query get those within threshold distance
     if opt.ground_truth_path is not None:
         print('Calculating recalls using ground truth.')
-        #gt = eval_set.get_positives()
 
-        #global_recalls = compute_recall(gt, predictions, eval_set.numQ, n_values, 'NetVLAD')
-        #local_recalls = compute_recall(gt, reranked_predictions, eval_set.numQ, n_values, 'PatchNetVLAD')
-
-        #write_recalls_output(opt, global_recalls, local_recalls, n_values)
     else:
         print('No ground truth was provided; not calculating recalls.')
 
-def matching():
-# def main():
+def matching(img_path,cf):
 
-#     python feature_match.py \
-#   --config_path patchnetvlad/configs/performance.ini \
-#   --dataset_root_dir=/data_disk/user_datasets/ryeong_workspace/space_search/Boston/yeah/union \
-#   --query_file_path=boston_query.txt \
-#   --index_file_path=boston.txt \
-#   --query_input_features_dir patchnetvlad/output_features/for_indexing_boston_all_query \
-#   --index_input_features_dir patchnetvlad/output_features/for_indexing_boston_all \
-#   --result_save_folder patchnetvlad/results/boston_first
-
-# 메타버스용
-#     python feature_match.py \
-#   --config_path patchnetvlad/configs/performance.ini \
-#   --dataset_root_dir=/home/user/Patch-NetVLAD/patchnetvlad/image_files_smap \
-#   --query_file_path=image_names_query.txt \
-#   --index_file_path=image_names_index_meta.txt \
-#   --query_input_features_dir patchnetvlad/output_features/first_query \
-#   --index_input_features_dir patchnetvlad/output_features/first_index \
-#   --result_save_folder patchnetvlad/results/maching_output1
-
-
-#   --ground_truth_path patchnetvlad/dataset_gt_files/pitts30k_test.npz \
-
-
-
-#우리데이터셋 학습 + 세종데이터셋 서비스
-#     python feature_match.py \
-#   --config_path patchnetvlad/configs/performance.ini \
-#   --dataset_root_dir=/home/user/Patch-NetVLAD/patchnetvlad/image_files \
-#   --query_file_path=image_names_query.txt \
-#   --index_file_path=image_names_index.txt \
-#   --query_input_features_dir patchnetvlad/output_features/space_query_first_try \
-#   --index_input_features_dir patchnetvlad/output_features/space_search_first_try \
-#   --result_save_folder patchnetvlad/results/space_search_result
-
-#매플러리 프리트레인드 모델 + 세종데이터셋 서비스
-#     python feature_match.py \
-#   --config_path patchnetvlad/configs/performance.ini \
-#   --dataset_root_dir=/home/user/Patch-NetVLAD/patchnetvlad/image_files \
-#   --query_file_path=image_names_query.txt \
-#   --index_file_path=image_names_index.txt \
-#   --query_input_features_dir patchnetvlad/output_features/mapillary_query_first_try \
-#   --index_input_features_dir patchnetvlad/output_features/mapillary_search_first_try \
-#   --result_save_folder patchnetvlad/results/mapillary_search_result
-
-#메타몽 그레이
-#     python feature_match.py \
-#   --config_path patchnetvlad/configs/performance.ini \
-#   --dataset_root_dir=/home/user/Patch-NetVLAD/dataset_meta/aroundsejong/color \
-#   --query_file_path=metamong_color_query.txt \
-#   --index_file_path=metamong_color.txt \
-#   --query_input_features_dir patchnetvlad/output_features/metamong_color_query \
-#   --index_input_features_dir patchnetvlad/output_features/metamong_color_index \
-#   --result_save_folder patchnetvlad/results/metametamong_color
-
-
-
-# Mobius_test
-#     python feature_match.py \
-#   --config_path patchnetvlad/configs/performance.ini \
-#   --dataset_root_dir=/data_disk/home/user/Patch-NetVLAD/patchnetvlad/mobius/union \
-#   --query_file_path=mobius_query.txt \
-#   --index_file_path=mobius_db.txt \
-#   --query_input_features_dir patchnetvlad/output_features/mobius_query \
-#   --index_input_features_dir patchnetvlad/output_features/mobius_db \
-#   --result_save_folder patchnetvlad/results/mobius_test_result
 
     parser = argparse.ArgumentParser(description='Patch-NetVLAD-Feature-Match')
     parser.add_argument('--config_path', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'configs/performance.ini'),
                         help='File name (with extension) to an ini file that stores most of the configuration data for patch-netvlad')
-    parser.add_argument('--dataset_root_dir', type=str, default='/data_disk/home/user/Patch-NetVLAD/patchnetvlad/mobius/union',
-                        help='If the files in query_file_path and index_file_path are relative, use dataset_root_dir as prefix.')
     parser.add_argument('--query_file_path', type=str, default='mobius_query.txt',
                         help='Path (with extension) to a text file that stores the save location and name of all query images in the dataset')
     parser.add_argument('--index_file_path', type=str, default='mobius_db.txt',
                         help='Path (with extension) to a text file that stores the save location and name of all database images in the dataset')
-    parser.add_argument('--query_input_features_dir', type=str, default='patchnetvlad/output_features/mobius_query',
+    parser.add_argument('--query_input_features_dir', type=str, default='/{filepath}/AIHub/Patch_NetVLAD/patchnetvlad/output_features/mobius_query',
                         help='Path to load all query patch-netvlad features')
-    parser.add_argument('--index_input_features_dir', type=str, default='patchnetvlad/output_features/mobius_db',
+    parser.add_argument('--index_input_features_dir', type=str, default='/{filepath}/AIHub/Patch_NetVLAD/patchnetvlad/output_features/mobius_db',
                         help='Path to load all database patch-netvlad features')
     parser.add_argument('--ground_truth_path', type=str, default=None,
                         help='Path (with extension) to a file that stores the ground-truth data')
-    parser.add_argument('--result_save_folder', type=str, default='patchnetvlad/results/mobius_test_result')
+    parser.add_argument('--result_save_folder', type=str, default='/{filepath}/AIHub/Patch_NetVLAD/patchnetvlad/results/mobius_test_result')
     parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
+    
 
-
-    # parser = argparse.ArgumentParser(description='Patch-NetVLAD-Feature-Match')
-    # parser.add_argument('--config_path', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'configs/performance.ini'),
-    #                     help='File name (with extension) to an ini file that stores most of the configuration data for patch-netvlad')
-    # parser.add_argument('--dataset_root_dir', type=str, default='',
-    #                     help='If the files in query_file_path and index_file_path are relative, use dataset_root_dir as prefix.')
-    # parser.add_argument('--query_file_path', type=str, required=True,
-    #                     help='Path (with extension) to a text file that stores the save location and name of all query images in the dataset')
-    # parser.add_argument('--index_file_path', type=str, required=True,
-    #                     help='Path (with extension) to a text file that stores the save location and name of all database images in the dataset')
-    # parser.add_argument('--query_input_features_dir', type=str, required=True,
-    #                     help='Path to load all query patch-netvlad features')
-    # parser.add_argument('--index_input_features_dir', type=str, required=True,
-    #                     help='Path to load all database patch-netvlad features')
-    # parser.add_argument('--ground_truth_path', type=str, default=None,
-    #                     help='Path (with extension) to a file that stores the ground-truth data')
-    # parser.add_argument('--result_save_folder', type=str, default='results')
-    # parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
     opt = parser.parse_args()
     print(opt)
 
@@ -327,14 +214,10 @@ def matching():
     if not os.path.isfile(opt.index_file_path):
         opt.index_file_path = join(PATCHNETVLAD_ROOT_DIR, 'dataset_imagenames', opt.index_file_path)
 
-    dataset = PlaceDataset(opt.query_file_path, opt.index_file_path, opt.dataset_root_dir, opt.ground_truth_path, config['feature_extract'])
+    dataset = PlaceDataset(opt.query_file_path, opt.index_file_path, img_path, opt.ground_truth_path, config['feature_extract'])
 
-    feature_match(dataset, device, opt, config)
+    feature_match(dataset, device, opt, config, cf)
 
     torch.cuda.empty_cache()  # garbage clean GPU memory, a bug can occur when Pytorch doesn't automatically clear the
                               # memory after runs
     print('Done')
-
-
-if __name__ == "__main__":
-    main()

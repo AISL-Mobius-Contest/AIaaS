@@ -47,9 +47,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
 
-from patchnetvlad.tools.datasets import PlaceDataset
-from patchnetvlad.models.models_generic import get_backend, get_model, get_pca_encoding
-from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
+from AIHub.Patch_NetVLAD.patchnetvlad.tools.datasets import PlaceDataset
+from AIHub.Patch_NetVLAD.patchnetvlad.models.models_generic import get_backend, get_model, get_pca_encoding
+from AIHub.Patch_NetVLAD.patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
+
 
 
 def feature_extract(eval_set, model, device, opt, config):
@@ -70,18 +71,14 @@ def feature_extract(eval_set, model, device, opt, config):
         tqdm.write('====> Extracting Features')
         db_feat = np.empty((len(eval_set), pool_size), dtype=np.float32)
 
-                        #indices는 그냥 색인의 불가함, 쿼리를 넣었을때는 당연히 1이 나오겠지
+
         for iteration, (input_data, indices) in \
                 enumerate(tqdm(test_data_loader, position=1, leave=False, desc='Test Iter'.rjust(15)), 1):
 
             indices_np = indices.detach().numpy()
             input_data = input_data.to(device)
-            # print(input_data)   #벡터값
-            #print(input_data.shape)
             image_encoding = model.encoder(input_data)
-            #encoder -> vgg16
-            # print(image_encoding)   #벡터값 인코딩한거
-            #print(image_encoding.shape)
+
             if config['global_params']['pooling'].lower() == 'patchnetvlad':
                 vlad_local, vlad_global = model.pool(image_encoding)
 
@@ -104,11 +101,9 @@ def feature_extract(eval_set, model, device, opt, config):
                         np.save(filename, db_feat_patches[i, :, :])
             else:
                 vlad_global = model.pool(image_encoding)            #넷블라드!!! model_generic의 add_module부분
-                #print(vlad_global)
-                #print(vlad_global.shape)#[1,8192] 4096 x 2일텐데..
+
                 vlad_global_pca = get_pca_encoding(model, vlad_global)
-                #print(vlad_global_pca)
-                #print("here")
+
                 #print(vlad_global_pca.shape) #[4096] pca는 차원 축소시켜주는 역할
                 # x가 cuda 디바이스로 올라갔을 때 
                 # c = x.numpy() (x) : cuda 디바이스로 올라갔을 때 바로 numpy로 
@@ -117,26 +112,20 @@ def feature_extract(eval_set, model, device, opt, config):
 
     np.save(output_global_features_filename, db_feat)
 
-def extracting():
-# def main():
+def extracting(img_path):
 
     parser = argparse.ArgumentParser(description='Patch-NetVLAD-Feature-Extract')
     parser.add_argument('--config_path', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'configs/performance.ini'),
                         help='File name (with extension) to an ini file that stores most of the configuration data for patch-netvlad')
     parser.add_argument('--dataset_file_path', type=str,  default='mobius_query.txt',
                         help='Full path (with extension) to a text file that stores the save location and name of all images in the dataset folder')
-    parser.add_argument('--dataset_root_dir', type=str, default='/data_disk/home/user/Patch-NetVLAD/patchnetvlad/mobius/union',
-                        help='If the files in dataset_file_path are relative, use dataset_root_dir as prefix.')
     parser.add_argument('--output_features_dir', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'output_features/mobius_query'),
                         help='Path to store all patch-netvlad features')
     parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
 
 
     opt = parser.parse_args()
-    # print(opt)
-    # print(opt.config_path)
-    # print(opt.dataset_file_path)
-    # print(opt.dataset_root_dir)
+
     configfile = opt.config_path    
     assert os.path.isfile(configfile)
     config = configparser.ConfigParser()
@@ -149,13 +138,12 @@ def extracting():
     device = torch.device("cuda" if cuda else "cpu")
 
     encoder_dim, encoder = get_backend()
-    # enc_dim = 512
-    # enc = models.vgg16(pretrained=True)
+
 
     if not os.path.isfile(opt.dataset_file_path):
         opt.dataset_file_path = join(PATCHNETVLAD_ROOT_DIR, 'dataset_imagenames', opt.dataset_file_path)
 
-    dataset = PlaceDataset(None, opt.dataset_file_path, opt.dataset_root_dir, None, config['feature_extract'])
+    dataset = PlaceDataset(None, opt.dataset_file_path, img_path, None, config['feature_extract'])
 
     # must resume to do extraction
     resume_ckpt = config['global_params']['resumePath'] + config['global_params']['num_pcs'] + '.pth.tar'       #모델 불러오기
@@ -209,5 +197,5 @@ def extracting():
     print('\n\nDone. Finished extracting and saving features')
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

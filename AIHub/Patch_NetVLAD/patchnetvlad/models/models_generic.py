@@ -26,8 +26,11 @@ SOFTWARE.
 import torchvision.models as models
 import torch.nn as nn
 import torch.nn.functional as F
-from patchnetvlad.models.netvlad import NetVLAD
-from patchnetvlad.models.patchnetvlad import PatchNetVLAD
+from AIHub.Patch_NetVLAD.patchnetvlad.models.netvlad import NetVLAD
+from AIHub.Patch_NetVLAD.patchnetvlad.models.patchnetvlad import PatchNetVLAD
+
+# from patchnetvlad.models.netvlad import NetVLAD
+# from patchnetvlad.models.patchnetvlad import PatchNetVLAD
 
 
 class Flatten(nn.Module):

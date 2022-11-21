@@ -1,7 +1,0 @@
-numpy 
-pytorch-gpu 
-torchvision 
-natsort 
-tqdm 
-pillow 
-scikit-learn 

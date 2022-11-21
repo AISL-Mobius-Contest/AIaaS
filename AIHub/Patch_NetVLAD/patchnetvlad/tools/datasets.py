@@ -33,7 +33,8 @@ import numpy as np
 from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 
-from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
+from AIHub.Patch_NetVLAD.patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
+# from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
 
 
 def input_transform(resize=(480, 640)):

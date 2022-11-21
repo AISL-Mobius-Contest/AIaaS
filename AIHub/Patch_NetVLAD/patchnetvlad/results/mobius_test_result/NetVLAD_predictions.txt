@@ -1,3 +1,3 @@
 # kapture format: 1.0
 # query_image, map_image
-query.jpg, 10.jpg
+query.jpg, 5.jpg

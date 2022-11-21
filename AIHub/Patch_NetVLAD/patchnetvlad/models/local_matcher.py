@@ -42,7 +42,7 @@ import os
 import numpy as np
 import torch
 from tqdm.auto import tqdm
-from patchnetvlad.tools.patch_matcher import PatchMatcher
+from AIHub.Patch_NetVLAD.patchnetvlad.tools.patch_matcher import PatchMatcher
 
 
 def calc_receptive_boxes(height, width):
